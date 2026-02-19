@@ -15,7 +15,7 @@
       color:#0b1020;
     }
     .card{
-      width:min(520px, 100%);
+      width:min(560px, 100%);
       background: rgba(255,255,255,.88);
       border:1px solid rgba(255,255,255,.6);
       border-radius:18px;
@@ -23,9 +23,26 @@
       padding:16px;
       backdrop-filter: blur(10px);
     }
+    .info{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-bottom:12px;
+    }
+    .box{
+      background: rgba(255,255,255,.7);
+      border: 1px solid rgba(12,16,32,.10);
+      border-radius:16px;
+      padding:12px;
+      line-height:1.15;
+      font-weight:800;
+    }
+    .box b{ display:block; font-size:13px; margin-bottom:8px; }
+    .line{ font-size:12px; font-weight:800; opacity:.9; margin:4px 0; }
+
     .row{ display:flex; gap:10px; flex-wrap:wrap; }
     select, input{
-      flex:1 1 140px;
+      flex:1 1 150px;
       border:0;
       border-radius:14px;
       padding:12px 12px;
@@ -34,7 +51,7 @@
       background: rgba(12,16,32,.08);
       color:#0b1020;
     }
-    input{ font-variant-numeric: tabular-nums; }
+
     .out{
       margin-top:12px;
       border-radius:16px;
@@ -58,14 +75,32 @@
       padding:8px 10px;
       background: rgba(255,255,255,.7);
       border: 1px solid rgba(12,16,32,.10);
-      font-weight:700;
+      font-weight:900;
       font-size:12px;
       white-space:nowrap;
     }
+
+    .pos{ margin-top:10px; }
+    .pos .box{ grid-column: 1 / -1; }
   </style>
 </head>
 <body>
   <div class="card">
+
+    <div class="info">
+      <div class="box">
+        <b>Micro</b>
+        <div class="line">Tick: $0.5</div>
+        <div class="line">Punto: $2</div>
+      </div>
+
+      <div class="box">
+        <b>Mini</b>
+        <div class="line">Tick: $5</div>
+        <div class="line">Punto: $20</div>
+      </div>
+    </div>
+
     <div class="row">
       <select id="tipo">
         <option value="micro" selected>Micro (MNQ)</option>
@@ -78,19 +113,33 @@
 
     <div class="out" aria-live="polite">
       <p class="big" id="contratos">0</p>
-      <div class="chip" id="equiv">0</div>
+      <div class="chip" id="equiv">$0</div>
     </div>
+
+    <div class="pos">
+      <div class="box">
+        <b>Posición</b>
+        <div class="line" id="posTick">Tick: $0</div>
+        <div class="line" id="posPunto">Punto: $0</div>
+      </div>
+    </div>
+
   </div>
 
   <script>
     const elTipo = document.getElementById("tipo");
     const elObj  = document.getElementById("objetivo");
     const elPts  = document.getElementById("puntos");
+
     const elC    = document.getElementById("contratos");
     const elEq   = document.getElementById("equiv");
+    const elPosTick  = document.getElementById("posTick");
+    const elPosPunto = document.getElementById("posPunto");
+
+    const TICK_SIZE = 0.25; // NQ/MNQ
 
     function money(n){
-      if (!isFinite(n)) return "0";
+      if (!isFinite(n)) return "$0";
       const sign = n < 0 ? "-" : "";
       n = Math.abs(n);
       return sign + "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -101,25 +150,33 @@
       const objetivo = Math.abs(parseFloat(elObj.value));
       const puntos   = Math.abs(parseFloat(elPts.value));
 
-      const dpp = (tipo === "micro") ? 2 : 20;   // $ por punto
-      const sym = (tipo === "micro") ? "MNQ" : "NQ";
+      const point = (tipo === "micro") ? 2 : 20;     // $/punto
+      const tick  = point * TICK_SIZE;               // $/tick
 
       if (!isFinite(objetivo) || !isFinite(puntos) || objetivo <= 0 || puntos <= 0){
         elC.textContent = "0";
-        elEq.textContent = sym + " · " + money(0);
+        elEq.textContent = "$0";
+        elPosTick.textContent  = "Tick: $0";
+        elPosPunto.textContent = "Punto: $0";
         return;
       }
 
-      const perContract = puntos * dpp;
-      const exact = objetivo / perContract;
+      // contratos aproximados (redondeo normal)
+      const perContractMove = puntos * point;        // $ por ese movimiento (1 contrato)
+      const exact = objetivo / perContractMove;
+      const contracts = Math.max(0, Math.round(exact));
 
-      const rounded = Math.round(exact); // redondeo normal
-      const needed = Math.max(1, rounded);
+      // PnL aproximado del movimiento con esos contratos
+      const approxMove = contracts * perContractMove;
 
-      const approx = needed * perContract;
+      // Sensibilidad de la posición (por 1 tick y por 1 punto)
+      const posTickValue  = contracts * tick;        // $ por 1 tick de movimiento
+      const posPointValue = contracts * point;       // $ por 1 punto de movimiento
 
-      elC.textContent = String(needed);
-      elEq.textContent = sym + " · " + money(approx);
+      elC.textContent = String(contracts);
+      elEq.textContent = money(approxMove);
+      elPosTick.textContent  = "Tick: " + money(posTickValue);
+      elPosPunto.textContent = "Punto: " + money(posPointValue);
     }
 
     ["input","change"].forEach(evt=>{
